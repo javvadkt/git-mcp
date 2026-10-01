@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "supergateway --port $PORT --cors --stdio \"npx @modelcontextprotocol/server-github\""
+    "start": "supergateway --port $PORT --baseUrl https://git-mcp-ig1g.onrender.com --cors --stdio \"npx @modelcontextprotocol/server-github\""
   },
   "dependencies": {
     "@modelcontextprotocol/server-github": "^0.6.2",
