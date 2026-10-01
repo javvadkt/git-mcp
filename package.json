@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "supergateway --port $PORT --baseUrl https://git-mcp-ig1g.onrender.com --cors --stdio \"npx @modelcontextprotocol/server-github\""
+    "start": "node server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/server-github": "^0.6.2",
-    "supergateway": "^2.0.0"
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
   }
 }
