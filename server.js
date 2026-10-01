@@ -5,20 +5,20 @@ import { spawn } from "child_process";
 const app = express();
 const port = process.env.PORT || 8080;
 
-// Enable CORS for web clients like Gemini
+// Enable CORS for all incoming requests (including OPTIONS preflight)
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// Health check endpoint
+// Store isolated client sessions
+const sessions = new Map();
+
+// Root health check endpoint
 app.get("/", (req, res) => {
   res.status(200).send("MCP Server is running");
 });
 
-// Active sessions map
-const sessions = new Map();
-
-// SSE Handler
-const handleSSE = (req, res) => {
+// SSE Handshake endpoint
+app.get("/sse", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -27,19 +27,17 @@ const handleSSE = (req, res) => {
 
   const sessionId = Math.random().toString(36).substring(2, 12);
 
-  // Use the pre-installed local binary directly for instant response
+  // Spawn an isolated GitHub MCP instance for this connection
   const child = spawn("npx", ["@modelcontextprotocol/server-github"], {
-    env: process.env,
+    env: { ...process.env },
     shell: true,
   });
 
   sessions.set(sessionId, { child, res });
 
-  // Use the full absolute URL so Gemini routes messages to your server
-  const protocol = req.headers["x-forwarded-proto"] || "https";
+  // Send the FULL absolute endpoint URL
   const host = req.get("host");
-  const fullEndpointUrl = `${protocol}://${host}/messages?sessionId=${sessionId}`;
-
+  const fullEndpointUrl = `https://${host}/message?sessionId=${sessionId}`;
   res.write(`event: endpoint\ndata: ${fullEndpointUrl}\n\n`);
 
   let buffer = "";
@@ -56,21 +54,17 @@ const handleSSE = (req, res) => {
   });
 
   child.stderr.on("data", (err) => {
-    console.error(`MCP process log: ${err}`);
+    console.error(`MCP stderr [${sessionId}]:`, err.toString());
   });
 
   req.on("close", () => {
     child.kill();
     sessions.delete(sessionId);
   });
-};
+});
 
-// Support both /sse and /mcp endpoints
-app.get("/sse", handleSSE);
-app.get("/mcp", handleSSE);
-
-// Client message receiver
-app.post("/messages", (req, res) => {
+// Message receiver endpoint
+app.post("/message", (req, res) => {
   const sessionId = req.query.sessionId;
   const session = sessions.get(sessionId);
 
@@ -78,10 +72,11 @@ app.post("/messages", (req, res) => {
     return res.status(404).send("Session not found");
   }
 
+  // Forward JSON-RPC message directly to the MCP process
   session.child.stdin.write(JSON.stringify(req.body) + "\n");
   res.status(202).send("Accepted");
 });
 
 app.listen(port, () => {
-  console.log(`MCP server active on port ${port}`);
+  console.log(`MCP server listening on port ${port}`);
 });
